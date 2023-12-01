@@ -1,0 +1,145 @@
+Siempre en el directorio root
+####################################
+#Abrimos el firewall en los puertos que necesitamos "sin permanent se borran al reiniciar"
+firewall-cmd --permanent --add-port=80/tcp
+firewall-cmd --permanent --add-port=443/tcp
+firewall-cmd --permanent --add-port=5666/tcp
+firewall-cmd --reload
+#Verificar las reglas
+firewall-cmd --list-all
+systemctl reboot
+####################################
+2-Instalacion de dependencias para instalar nagios
+yum install -y gettext wget net-snmp-utils openssl-devel glibc-common unzip perl epel-release gcc php gd automake autoconf httpd make glibc gd-devel net-snmp
+yum install perl-Net-SNMP
+# Aceptar 2 veces
+####################################
+# Agregamos un usuario y lo agregamos a un grupo "nagios" usuario "apache"
+useradd nagios
+usermod -a -G nagios apache
+id nagios
+id apache
+####################################
+2- Link de descarga de los archivos fuente de Nagios (Binarios)
+https://github.com/NagiosEnterprises/nagioscore/releases
+# 1 Entrar a la pag y click en copiar direccion del enlace nombre.tar.gz luego pegar despues del comando wget
+wget https://github.com/NagiosEnterprises/nagioscore/releases/download/nagios-4.4.11/nagios-4.4.11.tar.gz
+# 2 Descomprimir el archivod escargado
+tar -xzvf nagios-4.4.11.tar.gz
+# 3 Ingresar al rchivo descomprimido
+cd nagios-4.4.11
+# 4 Ejecutar el archivo configure
+./configure
+# 5 Compilamos
+make all
+# 6 Instalacion
+make install
+make install-init
+make install-commandmode
+make install-config
+make install-webconf
+# 7 Habilitar nagios para que inicie junto al sistema
+systemctl enable nagios
+# 8 Habilitar el servicio de apache
+systemctl enable httpd
+# 9 Contraseña para nagios -c es la primera vez, si deseamos agregar otro usuario omitir -c
+htpasswd -c /usr/local/nagios/etc/htpasswd.users nagiosadmin
+# Iniciar el servicio nagios y apache
+systemctl start nagios
+systemctl start httpd
+systemctl status nagios # verificamos que esten activos
+systemctl status httpd # verificamos que esten activos
+systemctl is-enabled nagios  # Verificar si un servicio esta habilitado para iniciar con el sistema
+systemctl is-enabled httpd  # Verificar si un servicio esta habilitado para iniciar con el sistema
+####################################
+#Link de descarga de los archivos fuente de los Plugins de Nagios
+https://github.com/nagios-plugins/nagios-plugins/releases
+# 1 Entrar a la pag y click en copiar direccion del enlace nombre.tar.gz luego pegar despues del comando wget
+wget https://github.com/nagios-plugins/nagios-plugins/releases/download/release-2.4.4/nagios-plugins-2.4.4.tar.gz
+# 2 Descomprimir el archivod escargado
+tar -xzvf nagios-plugins-2.4.4.tar.gz
+# 3 Ingresar al archivo descomprimido
+cd nagios-plugins-2.4.4
+# 4 Ejecutar el archivo configure
+./configure
+# 5 Compila e instala en un solo paso
+make install
+# 6 Reiniciar el servicio de nagios
+systemctl restart nagios
+# 7 Hubicacion de los plugins que se pueden utilizar
+cd /usr/local/nagios/libexec/
+####################################
+#Link de descarga de los archivos fuente de NRPE (Ejecuta los Plugins para obtener respuestas de los equipos a monitorear)
+https://github.com/NagiosEnterprises/nrpe/releases/
+# 1 Entrar a la pag y click en copiar direccion del enlace nombre.tar.gz luego pegar despues del comando wget
+wget https://github.com/NagiosEnterprises/nrpe/releases/download/nrpe-4.1.0/nrpe-4.1.0.tar.gz
+# 2 Descomprimir el archivod escargado
+tar -xzvf nrpe-4.1.0.tar.gz
+# 3 Ingresar al rchivo descomprimido
+cd nrpe-4.1.0
+# 4 Ejecutar el archivo configure
+./configure
+# 5 Compila e instala en un solo paso
+make check_nrpe
+#Copiar el NRPE que acabamos de compiar en el directorio donde se encuentran los ejecutables
+make install-plugin
+####################################
+#Instalar NRPE en el servidor como si fuera un cliente
+cd nrpe-4.1.0
+./configure
+make all
+make install
+make install-config
+make install-init
+systemctl enable nrpe
+systemctl start nrpe
+systemctl status nrpe
+
+cd /usr/local/nagios/libexec/
+./check_nrpe -H 127.0.0.1
+./check_nrpe -H localhost -c check_load
+####################################
+#Dato Importantes
+el NRPE opera con el puerto 5666, se tiene que habilitar en el FireWall
+NRPE port:    5666
+####################################
+#Crear un comando para que el NAGIOS pueda usar el comando NRPE que acabamos de crear
+#Ingresamos a /usr/local/nagios/etc/objects/commands.cfg copiamos al final el comando check
+vi /usr/local/nagios/etc/objects/commands.cfg
+############### Gondar ###############
+define command {
+        command_name check_nrpe
+        command_line $USER1$/check_nrpe -H $HOSTADDRESS$ -c $ARG1$
+}
+define command {
+        command_name check_nrpe
+        command_line $USER1$/check_nrpe -H $HOSTADDRESS$ -t 40 -c $ARG1$
+}
+
+############### NAGIOS NRPE V2 ###############
+define command {
+        command_name check_nrpev2
+        command_line $USER1$/check_nrpe -2 -H $HOSTADDRESS$ -t 40 -c $ARG1$
+}
+
+####################################
+Errores
+/usr/local/nagios/bin/nagios -v /usr/local/nagios/etc/nagios.cfg
+####################################
+#tree de 2 niveles que muestre solo los directorios
+tree /usr/local/nagios/ -L 2-d
+cd /usr/local/nagios/etc
+cgi.cfg #tiempo de regresco
+nagios.cfg #todas las configuraciones del core de Nagios
+resource.cfg #donde se encuentra la variable $USER1$
+htpasswd.users #El que creamos donde estan los usuarios que pueden iniciar sesion en la pag de Nagios
+objects #Se encuentra la configuracion de:
+commands.cfg #comandos
+contacts.cfg #contactos a los que se enviara correo
+templates.cfg #
+timeperiods.cfg
+#################
+libexec #Ubicacion de los Plugins
+Share #Todos los archivos de la pag WEB
+#################
+
